@@ -11,7 +11,7 @@
 
 **1. Clone o repositório e entre na pasta**
 ```bash
-git clone https://github.com/AugustoZanoli/secops_watch.git
+git clone https://github.com/AugustoZanoli/secops_watch_api.git
 cd secops_watch
 ```
 
