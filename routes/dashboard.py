@@ -1,32 +1,54 @@
 from flask import Blueprint, jsonify
-from db import get_connection
 
-dashboard_bp = Blueprint(
-    "dashboard",
-    __name__
-)
+from db import query
 
-@dashboard_bp.route("/kpis")
+dashboard_bp = Blueprint("dashboard", __name__)
+
+
+# Pega os números gerais do dashboard.
+@dashboard_bp.get("/kpis")
 def get_kpis():
-
-    conn = get_connection()
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT *
+    row = query(
+        """
+        SELECT total_logins,
+               total_users,
+               total_computers,
+               period_days,
+               avg_logins_per_day
         FROM dashboard_kpis
+        ORDER BY id
         LIMIT 1
-    """)
+        """,
+        one=True,
+    )
+    if row is None:
+        return jsonify({"error": "no kpi data"}), 404
+    return jsonify(row)
 
-    row = cur.fetchone()
 
-    cur.close()
-    conn.close()
+# Devolve quantos logins teve em cada dia.
+@dashboard_bp.get("/login-trend")
+def get_login_trend():
+    rows = query(
+        """
+        SELECT day, login_count, is_low_volume_day
+        FROM daily_login_trend
+        ORDER BY day
+        """
+    )
+    return jsonify(rows)
 
-    return jsonify({
-        "total_logins": row[1],
-        "total_users": row[2],
-        "total_computers": row[3],
-        "period_days": row[4],
-        "avg_logins_per_day": row[5]
-    })
+
+# Conta quantos usuários tem em cada nível de risco.
+@dashboard_bp.get("/risk-summary")
+def get_risk_summary():
+    rows = query(
+        """
+        SELECT risk_level, COUNT(*) AS count
+        FROM user_risk
+        GROUP BY risk_level
+        """
+    )
+    summary = {r["risk_level"]: r["count"] for r in rows}
+    summary["total"] = sum(r["count"] for r in rows)
+    return jsonify(summary)
