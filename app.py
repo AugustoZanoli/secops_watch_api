@@ -5,8 +5,6 @@ from config import Config
 from db import DatabaseError, ping
 
 from routes.dashboard import dashboard_bp
-from routes.users import users_bp
-from routes.computers import computers_bp
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -14,8 +12,6 @@ app.config.from_object(Config)
 CORS(app, origins=["http://localhost:5173"])
 
 app.register_blueprint(dashboard_bp, url_prefix="/api/dashboard")
-app.register_blueprint(users_bp, url_prefix="/api/users")
-app.register_blueprint(computers_bp, url_prefix="/api/computers")
 
 
 # Diz se a API e o banco estão de pé.
