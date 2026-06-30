@@ -46,7 +46,7 @@ Todo erro vem em JSON, nunca em HTML.
 
 ## Avisos importantes (leia antes de codar)
 
-- **`daily-logins.day` é um inteiro** (índice do dia: 0, 1, 2, ...), **não uma data**. O dataset não tem data real — use como label do eixo X ("Dia N").
+- **`daily-logins.day` é uma data ISO** (`YYYY-MM-DD`). É **sintética**: o dataset não tem data real, então o índice do dia foi ancorado em **2024-01-01** (dia 0). Use como eixo X de data normal.
 - **`user-risk.risk_level` vem em português:** `"Alto"`, `"Médio"`, `"Baixo"`. Só existem **3 níveis** (a tabela do Gold não tem tier "Crítico"). Pra um 4º tier, dá pra derivar do `risk_score` (0–100) no front.
 
 ---
@@ -86,8 +86,8 @@ Logins por dia, ordenado por `day` crescente. Array.
 
 ```json
 [
-  { "day": 0, "login_count": 3020038, "is_low_volume_day": false },
-  { "day": 5, "login_count": 499695,  "is_low_volume_day": true  }
+  { "day": "2024-01-01", "login_count": 3020038, "is_low_volume_day": false },
+  { "day": "2024-01-06", "login_count": 499695,  "is_low_volume_day": true  }
 ]
 ```
 `is_low_volume_day: true` = dia de volume atipicamente baixo (dá pra destacar no gráfico).

@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+
 from flask import Blueprint, jsonify
 
 from db import query
@@ -5,6 +7,9 @@ from db import query
 dashboard_bp = Blueprint("dashboard", __name__)
 
 RISK_LABELS = {"HIGH": "Alto", "MEDIUM": "Médio", "LOW": "Baixo"}
+
+# 01/01/2024 usado como referência de início (dia 0) -> derivado do índice do dia.
+DAY_ZERO = date(2024, 1, 1)
 
 
 # Pega os números gerais do dashboard.
@@ -28,7 +33,7 @@ def get_kpis():
     return jsonify(row)
 
 
-# Devolve quantos logins teve em cada dia.
+# Devolve quantos logins teve em cada dia (day vira data a partir de DAY_ZERO).
 @dashboard_bp.get("/daily-logins")
 def get_daily_logins():
     rows = query(
@@ -38,6 +43,8 @@ def get_daily_logins():
         ORDER BY day ASC
         """
     )
+    for r in rows:
+        r["day"] = (DAY_ZERO + timedelta(days=r["day"])).isoformat()
     return jsonify(rows)
 
 
