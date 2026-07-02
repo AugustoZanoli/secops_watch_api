@@ -66,3 +66,40 @@ def get_activity_heatmap():
         """
     )
     return jsonify(rows)
+
+
+# Conta usuários com sub-score alto (>=80) em cada dimensão de risco — proxy de
+# "tipo de anomalia" enquanto o banco não tem uma categorização explícita.
+@dashboard_bp.get("/anomaly-types")
+def get_anomaly_types():
+    row = query(
+        """
+        SELECT COUNT(*) FILTER (WHERE login_score >= 80)    AS login_atipico,
+               COUNT(*) FILTER (WHERE computer_score >= 80) AS computadores_atipicos,
+               COUNT(*) FILTER (WHERE volume_score >= 80)   AS volume_atipico,
+               COUNT(*) FILTER (WHERE redteam_score >= 80)  AS atividade_redteam
+        FROM user_risk
+        """,
+        one=True,
+    )
+    data = [
+        {"type": "Login atípico", "count": row["login_atipico"]},
+        {"type": "Computadores atípicos", "count": row["computadores_atipicos"]},
+        {"type": "Volume atípico", "count": row["volume_atipico"]},
+        {"type": "Atividade Red Team", "count": row["atividade_redteam"]},
+    ]
+    data.sort(key=lambda item: item["count"], reverse=True)
+    return jsonify(data)
+
+
+# Números gerais de red team (sinais reais de comprometimento no dataset).
+@dashboard_bp.get("/redteam-summary")
+def get_redteam_summary():
+    row = query(
+        "SELECT total_redteam_events, affected_users, source_computers, target_computers "
+        "FROM redteam_summary LIMIT 1",
+        one=True,
+    )
+    if row is None:
+        return jsonify({"error": "no redteam data"}), 404
+    return jsonify(row)
