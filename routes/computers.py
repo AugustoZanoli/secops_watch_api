@@ -1,21 +1,27 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify
 
-from db import query, parse_int
+from db import query
 
 computers_bp = Blueprint("computers", __name__)
 
 
-# Lista as máquinas mais acessadas.
-@computers_bp.get("/top")
-def top_computers():
-    limit = parse_int(request.args.get("limit"), default=10, minimum=1, maximum=100)
+# Lista as máquinas mais acessadas (top 100 pré-calculado no banco).
+@computers_bp.get("/top-computers")
+def get_top_computers():
     rows = query(
         """
-        SELECT computer_id, access_count, unique_users
+        SELECT computer AS computer_id,
+               total_authentications,
+               success_logins,
+               failed_logins,
+               active_days,
+               avg_daily_authentications,
+               max_daily_authentications,
+               redteam_source_events,
+               redteam_target_events,
+               unique_users
         FROM top_computers
-        ORDER BY access_count DESC
-        LIMIT %s
-        """,
-        (limit,),
+        ORDER BY total_authentications DESC
+        """
     )
     return jsonify(rows)

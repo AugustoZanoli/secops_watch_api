@@ -44,16 +44,3 @@ def ping():
         return True
     except DatabaseError:
         return False
-
-
-# Converte um texto da URL em número e segura dentro de um limite.
-def parse_int(value, default, minimum=0, maximum=None):
-    try:
-        n = int(value)
-    except (TypeError, ValueError):
-        return default
-    if n < minimum:
-        return minimum
-    if maximum is not None and n > maximum:
-        return maximum
-    return n

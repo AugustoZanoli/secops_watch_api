@@ -41,7 +41,8 @@ cp .env.example .env
 Preencha com suas credenciais:
 ```env
 DB_URL=localhost
-DB_NAME=secops_watch
+DB_PORT=5432
+DB_NAME=security_watch
 DB_USER=postgres
 DB_PASSWORD=sua_senha
 ```

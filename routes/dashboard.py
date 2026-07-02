@@ -1,8 +1,14 @@
+from datetime import date, timedelta
+
 from flask import Blueprint, jsonify
 
 from db import query
 
 dashboard_bp = Blueprint("dashboard", __name__)
+
+# 01/01/2024 usado como referência de início (dia 0) -> derivado do índice do dia.
+# 2024-01-01 cai numa segunda-feira, então day % 7 == 0 também representa segunda.
+DAY_ZERO = date(2024, 1, 1)
 
 
 # Pega os números gerais do dashboard.
@@ -10,13 +16,16 @@ dashboard_bp = Blueprint("dashboard", __name__)
 def get_kpis():
     row = query(
         """
-        SELECT total_logins,
-               total_users,
-               total_computers,
-               period_days,
-               avg_logins_per_day
+        SELECT total_users,
+               suspicious_users,
+               average_risk,
+               authentication_failure_rate,
+               critical_users,
+               high_users,
+               medium_users,
+               low_users,
+               after_hours_logins
         FROM dashboard_kpis
-        ORDER BY id
         LIMIT 1
         """,
         one=True,
@@ -26,29 +35,34 @@ def get_kpis():
     return jsonify(row)
 
 
-# Devolve quantos logins teve em cada dia.
-@dashboard_bp.get("/login-trend")
-def get_login_trend():
+# Devolve a série diária de autenticações (day vira data a partir de DAY_ZERO).
+@dashboard_bp.get("/login-timeline")
+def get_login_timeline():
     rows = query(
         """
-        SELECT day, login_count, is_low_volume_day
-        FROM daily_login_trend
-        ORDER BY day
+        SELECT day, authentications, success_logins, failed_logins, after_hours_logins
+        FROM login_timeline
+        ORDER BY day ASC
         """
     )
+    for r in rows:
+        r["day"] = (DAY_ZERO + timedelta(days=r["day"])).isoformat()
     return jsonify(rows)
 
 
-# Conta quantos usuários tem em cada nível de risco.
-@dashboard_bp.get("/risk-summary")
-def get_risk_summary():
+# Agrega hourly_activity num padrão semanal (dia da semana x hora) pro heatmap 7x24.
+@dashboard_bp.get("/activity-heatmap")
+def get_activity_heatmap():
     rows = query(
         """
-        SELECT risk_level, COUNT(*) AS count
-        FROM user_risk
-        GROUP BY risk_level
+        SELECT day % 7 AS dow,
+               hour,
+               SUM(authentications)::bigint AS authentications,
+               SUM(success_logins)::bigint AS success_logins,
+               SUM(failed_logins)::bigint AS failed_logins
+        FROM hourly_activity
+        GROUP BY dow, hour
+        ORDER BY dow, hour
         """
     )
-    summary = {r["risk_level"]: r["count"] for r in rows}
-    summary["total"] = sum(r["count"] for r in rows)
-    return jsonify(summary)
+    return jsonify(rows)
