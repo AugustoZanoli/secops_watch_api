@@ -4,12 +4,16 @@
 
 ```
 GET /api/health
+
 GET /api/dashboard/kpis
-GET /api/dashboard/daily-logins
-GET /api/dashboard/top-users
-GET /api/dashboard/top-computers
+GET /api/dashboard/login-timeline
+GET /api/dashboard/activity-heatmap
+
+GET /api/dashboard/risk-distribution
 GET /api/dashboard/user-risk
-GET /api/dashboard/risk-summary
+GET /api/dashboard/top-users
+
+GET /api/dashboard/top-computers
 ```
 
 ---
@@ -46,8 +50,14 @@ Todo erro vem em JSON, nunca em HTML.
 
 ## Avisos importantes (leia antes de codar)
 
-- **`daily-logins.day` é uma data ISO** (`YYYY-MM-DD`). É **sintética**: o dataset não tem data real, então o índice do dia foi ancorado em **2024-01-01** (dia 0). Use como eixo X de data normal.
-- **`user-risk.risk_level` vem em português:** `"Alto"`, `"Médio"`, `"Baixo"`. Só existem **3 níveis** (a tabela do Gold não tem tier "Crítico"). Pra um 4º tier, dá pra derivar do `risk_score` (0–100) no front.
+- **`login-timeline.day` é uma data ISO** (`YYYY-MM-DD`). É **sintética**: o dataset não tem data real, o índice do dia foi ancorado em **2024-01-01** (dia 0, que é uma segunda-feira).
+- **`failed_logins` e `authentication_failure_rate` estão zerados.** As colunas existem no banco (`dashboard_kpis`, `login-timeline`, `activity-heatmap`) mas o pipeline que popula os dados ainda não calcula falhas de autenticação de verdade — hoje toda linha vem com `0`. Isso é um problema de dado upstream, não da API; os campos serão preenchidos quando o pipeline for corrigido.
+- **`risk_level` vem em inglês:** `"Critical"`, `"High"`, `"Medium"`, `"Low"` — 4 níveis (diferente da versão anterior da API, que tinha só 3 e traduzia pro português).
+- **`activity-heatmap` é um agregado semanal**, não os 58 dias brutos do dataset. `dow` é dia da semana (`0` = segunda, ..., `6` = domingo), calculado como `day % 7` e somado entre todas as semanas do período. Pensado pro heatmap 7×24.
+- **`top-users` tem só 100 linhas** (os usuários de maior risco, pré-calculados no banco). Para o dataset completo de risco (12k+ usuários, sem contagem de login) use `user-risk`.
+- **Ainda não implementado** (pendente de dado novo do pipeline):
+  - KPI de "acessos fora do padrão" — nenhuma coluna do banco corresponde a essa métrica hoje.
+  - Breakdown de "tipos de anomalia" — o banco só tem totais agregados de redteam (`redteam_summary`), sem quebra por tipo.
 
 ---
 
@@ -70,38 +80,95 @@ Números gerais (cards do topo). Objeto único.
 
 ```json
 {
-  "total_logins": 708304516,
-  "total_users": 11361,
-  "total_computers": 22283,
-  "period_days": 274,
-  "avg_logins_per_day": 2585052.97
+  "total_users": 12414,
+  "suspicious_users": 3285,
+  "average_risk": 50.0,
+  "authentication_failure_rate": 0.0,
+  "critical_users": 531,
+  "high_users": 2754,
+  "medium_users": 5306,
+  "low_users": 3823,
+  "after_hours_logins": 156600476
 }
 ```
 
 ---
 
-### `GET /api/dashboard/daily-logins`
+### `GET /api/dashboard/login-timeline`
 
-Logins por dia, ordenado por `day` crescente. Array.
+Autenticações por dia, ordenado por `day` crescente. Array.
 
 ```json
 [
-  { "day": "2024-01-01", "login_count": 3020038, "is_low_volume_day": false },
-  { "day": "2024-01-06", "login_count": 499695,  "is_low_volume_day": true  }
+  { "day": "2024-01-01", "authentications": 5118366, "success_logins": 5062449, "failed_logins": 0, "after_hours_logins": 1879135 },
+  { "day": "2024-01-02", "authentications": 5812321, "success_logins": 5754246, "failed_logins": 0, "after_hours_logins": 2414306 }
 ]
 ```
-`is_low_volume_day: true` = dia de volume atipicamente baixo (dá pra destacar no gráfico).
+
+---
+
+### `GET /api/dashboard/activity-heatmap`
+
+Autenticações por dia da semana × hora, somadas entre todas as semanas do período. Array de até 168 linhas (7 × 24).
+
+```json
+[
+  { "dow": 0, "hour": 0, "authentications": 83931, "success_logins": 82641, "failed_logins": 0 },
+  { "dow": 0, "hour": 1, "authentications": 85036, "success_logins": 83722, "failed_logins": 0 }
+]
+```
+`dow`: `0` = segunda-feira ... `6` = domingo.
+
+---
+
+### `GET /api/dashboard/risk-distribution`
+
+Contagem de usuários por nível de risco (atalho pré-agregado pro donut de severidade).
+
+```json
+{ "Critical": 531, "High": 2754, "Medium": 5306, "Low": 3823, "total": 12414 }
+```
+
+---
+
+### `GET /api/dashboard/user-risk`
+
+Todos os usuários (12k+) com seus scores de risco, ordenado por `risk_score` decrescente. Array.
+Não tem contagem de login/acessos — só os sub-scores normalizados (0–100) que compõem o `risk_score`.
+
+```json
+[
+  {
+    "user_id": "U66",
+    "risk_score": 99.98,
+    "risk_level": "Critical",
+    "login_score": 99.99,
+    "computer_score": 99.96,
+    "volume_score": 99.98,
+    "redteam_score": 100.0
+  }
+]
+```
 
 ---
 
 ### `GET /api/dashboard/top-users`
 
-Usuários que mais logaram, ordenado por `login_count` decrescente. Array (todos; fatie no front).
+Os 100 usuários de maior risco, ordenado por `risk_score` decrescente. Array.
+Consumido pela tabela de ranking **e** pelo scatter de acessos × score (limitado a esses 100).
 
 ```json
 [
-  { "user_id": "U12", "login_count": 29331375, "unique_computers": 254 },
-  { "user_id": "U13", "login_count": 21576178, "unique_computers": 26  }
+  {
+    "user_id": "U66",
+    "risk_score": 99.98,
+    "risk_level": "Critical",
+    "redteam_events": 118,
+    "total_logins": 11182208,
+    "unique_computers": 253,
+    "active_days": 58,
+    "max_daily_authentications": 242890
+  }
 ]
 ```
 
@@ -109,43 +176,23 @@ Usuários que mais logaram, ordenado por `login_count` decrescente. Array (todos
 
 ### `GET /api/dashboard/top-computers`
 
-Máquinas mais acessadas, ordenado por `access_count` decrescente. Array.
-
-```json
-[
-  { "computer_id": "C148", "access_count": 24622287, "unique_users": 887  },
-  { "computer_id": "C219", "access_count": 14284645, "unique_users": 1136 }
-]
-```
-
----
-
-### `GET /api/dashboard/user-risk`
-
-Todos os usuários com dados de risco, ordenado por `risk_score` decrescente. Array.
-Consumido pela tabela de ranking **e** pelo donut de severidade.
+As 100 máquinas mais acessadas, ordenado por `total_authentications` decrescente. Array.
 
 ```json
 [
   {
-    "user_id": "U926",
-    "login_count": 48642,
-    "unique_computers": 191,
-    "risk_level": "Alto",
-    "risk_score": 100
+    "computer_id": "C2388",
+    "total_authentications": 14256,
+    "success_logins": 14250,
+    "failed_logins": 0,
+    "active_days": 58,
+    "avg_daily_authentications": 245.79,
+    "max_daily_authentications": 782,
+    "redteam_source_events": 0,
+    "redteam_target_events": 27,
+    "unique_users": 34
   }
 ]
-```
-`risk_level` ∈ `"Alto" | "Médio" | "Baixo"`.
-
----
-
-### `GET /api/dashboard/risk-summary`
-
-Contagem de usuários por nível (atalho pré-agregado pro donut, se não quiser contar no front).
-
-```json
-{ "Alto": 112, "Médio": 453, "Baixo": 10796, "total": 11361 }
 ```
 
 ---
@@ -154,7 +201,6 @@ Contagem de usuários por nível (atalho pré-agregado pro donut, se não quiser
 
 ```powershell
 $env:Path += ";C:\Program Files\PostgreSQL\18\bin"
-cd backend
 pip install -r requirements.txt
 Copy-Item .env.example .env   # preencher DB_PASSWORD
 flask run                     # http://localhost:5000
@@ -163,11 +209,9 @@ flask run                     # http://localhost:5000
 **`.env`:**
 ```
 DB_URL=localhost
-DB_PORT=5433
-DB_NAME=auth_analytics
+DB_PORT=5432
+DB_NAME=security_watch
 DB_USER=postgres
 DB_PASSWORD=sua_senha
 DEBUG=False
 ```
-
-> O Postgres roda na porta **5433** (não 5432).
