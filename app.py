@@ -11,7 +11,13 @@ from routes.computers import computers_bp
 app = Flask(__name__)
 app.config.from_object(Config)
 
-CORS(app, origins=["http://localhost:5173"])
+CORS(
+    app,
+    origins=[
+        "http://localhost:5173",
+        "https://secops-watch.onrender.com",
+    ],
+)
 
 app.register_blueprint(dashboard_bp, url_prefix="/api/dashboard")
 app.register_blueprint(risk_bp, url_prefix="/api/dashboard")
